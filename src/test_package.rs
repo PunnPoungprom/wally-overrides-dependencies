@@ -46,6 +46,7 @@ impl PackageBuilder {
             dependencies: Default::default(),
             server_dependencies: Default::default(),
             dev_dependencies: Default::default(),
+            overrides: Default::default(),
         };
 
         Self {

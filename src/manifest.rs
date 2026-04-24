@@ -28,6 +28,9 @@ pub struct Manifest {
 
     #[serde(default)]
     pub dev_dependencies: BTreeMap<String, PackageReq>,
+
+    #[serde(default)]
+    pub overrides: BTreeMap<String, PackageReq>,
 }
 
 impl Manifest {

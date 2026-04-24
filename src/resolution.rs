@@ -113,6 +113,19 @@ pub fn resolve(
 
     // Workhorse loop: resolve all dependencies, depth-first.
     'outer: while let Some(dependency_request) = packages_to_visit.pop_front() {
+        // Apply overrides: if the root manifest has an override for this package
+        // name, substitute the version requirement.
+        let effective_req = {
+            let req_name = dependency_request.package_req.name();
+            let override_key = format!("{}/{}", req_name.scope(), req_name.name());
+
+            if let Some(override_req) = root_manifest.overrides.get(&override_key) {
+                override_req.clone()
+            } else {
+                dependency_request.package_req.clone()
+            }
+        };
+
         // Locate all already-activated packages that might match this
         // dependency request.
         let mut matching_activated: Vec<_> = resolve
@@ -129,7 +142,7 @@ pub fn resolve(
         // Check for the highest version already-activated package that matches
         // our constraints.
         for package_id in &matching_activated {
-            if dependency_request.package_req.matches_id(package_id) {
+            if effective_req.matches_id(package_id) {
                 let metadata = resolve
                     .metadata
                     .get_mut(package_id)
@@ -173,7 +186,7 @@ pub fn resolve(
 
                 // Pull all of the possible candidate versions of the package we're
                 // looking for from the highest priority source which has them.
-                match registry.query(&dependency_request.package_req) {
+                match registry.query(&effective_req) {
                     Ok(manifests) => Some((source, manifests)),
                     Err(_) => None,
                 }
@@ -181,7 +194,7 @@ pub fn resolve(
             .ok_or_else(|| {
                 format_err!(
                     "Failed to find a source for {}",
-                    dependency_request.package_req
+                    effective_req
                 )
             })?;
 
@@ -276,7 +289,7 @@ pub fn resolve(
                 "No packages were found that matched ({req_realm:?}) {req}.\nAre you sure this is \
                  a {req_realm:?} dependency?",
                 req_realm = dependency_request.request_realm,
-                req = dependency_request.package_req,
+                req = effective_req,
             );
         } else {
             let conflicting_debug: Vec<_> = conflicting
@@ -288,7 +301,7 @@ pub fn resolve(
                 "All possible candidates for package {req} ({req_realm:?}) conflicted with other \
                  packages that were already installed. These packages were previously selected: \
                  {conflicting}",
-                req = dependency_request.package_req,
+                req = effective_req,
                 req_realm = dependency_request.request_realm,
                 conflicting = conflicting_debug.join(", "),
             );
